@@ -1,0 +1,19 @@
+services:
+  dowa:
+    build: .
+    image: dowa:latest
+    container_name: dowa
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DOWA_INTERVAL_SECONDS: "5"
+      DOWA_RETENTION_DAYS: "7"
+      DOWA_HISTORY_MINUTES_DEFAULT: "30"
+    volumes:
+      # Read-only is sufficient for listing containers and pulling stats.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - dowa-data:/data
+
+volumes:
+  dowa-data:

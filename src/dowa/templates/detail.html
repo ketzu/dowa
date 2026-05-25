@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>dowa — {{ container_id[:12] }}</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1><a href="/">dowa</a> <span class="crumb">/</span> <span id="container-name">{{ container_id[:12] }}</span></h1>
+    <div class="meta">
+      <label for="window-select">window</label>
+      <select id="window-select"></select>
+      <span id="bucket-info"></span>
+      <span id="status">connecting…</span>
+    </div>
+  </header>
+  <main id="detail">
+    <div class="summary">
+      <div class="kv"><div class="k">container id</div><div class="v" id="container-id">{{ container_id }}</div></div>
+      <div class="kv"><div class="k">image</div><div class="v" id="image">—</div></div>
+      <div class="kv"><div class="k">pids</div><div class="v" id="pids">—</div></div>
+      <div class="kv"><div class="k">last sample</div><div class="v" id="last-sample">—</div></div>
+    </div>
+    <section class="chart-section">
+      <h2>CPU</h2>
+      <div class="chart-wrap big"><canvas id="cpu-chart"></canvas></div>
+    </section>
+    <section class="chart-section">
+      <h2>Memory</h2>
+      <div class="chart-wrap big"><canvas id="mem-chart"></canvas></div>
+    </section>
+    <section class="chart-section">
+      <h2>Network (rate)</h2>
+      <div class="chart-wrap big"><canvas id="net-chart"></canvas></div>
+    </section>
+    <section class="chart-section">
+      <h2>Block I/O (rate)</h2>
+      <div class="chart-wrap big"><canvas id="io-chart"></canvas></div>
+    </section>
+  </main>
+  <script>
+    window.DOWA = {
+      containerId: {{ container_id|tojson }},
+      intervalMs: {{ interval_ms }},
+      historyMinutes: {{ history_minutes }},
+      retentionDays: {{ retention_days }},
+    };
+  </script>
+  <script src="/static/detail.js"></script>
+</body>
+</html>
