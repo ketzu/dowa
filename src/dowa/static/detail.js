@@ -4,6 +4,7 @@
   const bucketInfo = document.getElementById("bucket-info");
   const windowSelect = document.getElementById("window-select");
   const nameEl = document.getElementById("container-name");
+  const nameLinkEl = document.getElementById("container-name-link");
   const imageEl = document.getElementById("image");
   const pidsEl = document.getElementById("pids");
   const lastEl = document.getElementById("last-sample");
@@ -214,6 +215,7 @@
       }
       const data = await r.json();
       nameEl.textContent = data.name;
+      if (nameLinkEl) nameLinkEl.href = `/name/${encodeURIComponent(data.name)}`;
       imageEl.textContent = data.image || "—";
       pidsEl.textContent = data.latest?.pids ?? "—";
       lastEl.textContent = data.latest

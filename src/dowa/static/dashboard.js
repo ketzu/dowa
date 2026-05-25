@@ -4,7 +4,10 @@
   const status = document.getElementById("status");
   const bucketInfo = document.getElementById("bucket-info");
   const windowSelect = document.getElementById("window-select");
+  const historicalToggle = document.getElementById("include-historical");
   const cards = new Map(); // container_id -> { el, chart, name }
+  // Restore historical toggle preference from localStorage.
+  historicalToggle.checked = localStorage.getItem("dowa.includeHistorical") === "1";
 
   const PRESETS = [
     { label: "5 min",  minutes: 5 },
@@ -56,6 +59,14 @@
     return `${Math.round(seconds / 86400)}d`;
   }
 
+  function fmtAge(seconds) {
+    if (seconds == null || seconds < 0) return "—";
+    if (seconds < 60) return `${Math.round(seconds)}s ago`;
+    if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.round(seconds / 3600)}h ago`;
+    return `${Math.round(seconds / 86400)}d ago`;
+  }
+
   function pickTimeUnit(minutes) {
     if (minutes <= 60) return "minute";
     if (minutes <= 60 * 24) return "hour";
@@ -74,8 +85,10 @@
     el.className = "card";
     el.innerHTML = `
       <div class="head">
-        <div>
-          <a class="name" href="/container/${encodeURIComponent(c.container_id)}"></a>
+        <div class="head-main">
+          <a class="name" href="/name/${encodeURIComponent(c.name)}"></a>
+          <a class="id-chip" href="/container/${encodeURIComponent(c.container_id)}" title="${c.container_id}">${c.container_id.slice(0, 12)}</a>
+          <span class="stale-badge" hidden>stopped</span>
           <div class="image"></div>
         </div>
         <div class="pid metric"><label>pids</label><div class="value">—</div></div>
@@ -181,9 +194,17 @@
     card.chart.update("none");
   }
 
-  function updateCardText(card, c) {
+  function updateCardText(card, c, now) {
     const latest = c.latest || {};
+    card.el.classList.toggle("stale", !!c.stale);
     card.el.querySelector(".name").textContent = c.name;
+    const staleBadge = card.el.querySelector(".stale-badge");
+    if (c.stale && latest.ts != null) {
+      staleBadge.hidden = false;
+      staleBadge.textContent = `stopped · ${fmtAge(now - latest.ts)}`;
+    } else {
+      staleBadge.hidden = true;
+    }
     card.el.querySelector(".image").textContent = c.image || "";
     card.el.querySelector(".pid .value").textContent = latest.pids ?? "—";
 
@@ -211,11 +232,16 @@
     if (inFlight) return; // skip overlapping polls when the server is slow
     inFlight = true;
     try {
-      const r = await fetch(`/api/containers?minutes=${currentMinutes}`);
+      const params = new URLSearchParams({ minutes: String(currentMinutes) });
+      if (historicalToggle.checked) params.set("include_historical", "true");
+      const r = await fetch(`/api/containers?${params}`);
       if (!r.ok) throw new Error(`http ${r.status}`);
       const data = await r.json();
       const containers = data.containers || [];
-      status.textContent = `${containers.length} container${containers.length === 1 ? "" : "s"} · ${new Date().toLocaleTimeString()}`;
+      const live = containers.filter(c => !c.stale).length;
+      const stale = containers.length - live;
+      status.textContent =
+        `${live} live${stale ? ` + ${stale} stale` : ""} · ${new Date().toLocaleTimeString()}`;
       bucketInfo.textContent = `bucket: ${fmtBucket(data.bucket)}`;
 
       if (containers.length === 0 && cards.size === 0) {
@@ -233,7 +259,9 @@
           card = makeCard(c);
           cards.set(c.container_id, card);
         }
-        updateCardText(card, c);
+        // Re-append in API order to keep cards grouped by name.
+        grid.appendChild(card.el);
+        updateCardText(card, c, data.now);
         setChartData(card, c.history || []);
       }
       for (const [id, card] of cards) {
@@ -252,6 +280,10 @@
 
   windowSelect.addEventListener("change", () => {
     currentMinutes = Number(windowSelect.value);
+    refresh();
+  });
+  historicalToggle.addEventListener("change", () => {
+    localStorage.setItem("dowa.includeHistorical", historicalToggle.checked ? "1" : "0");
     refresh();
   });
 

@@ -83,7 +83,7 @@ class Storage:
                        JOIN (SELECT container_id, MAX(ts) AS ts
                              FROM samples GROUP BY container_id) m
                        ON s.container_id = m.container_id AND s.ts = m.ts
-                       ORDER BY s.name"""
+                       ORDER BY s.name ASC, s.ts DESC"""
                 )
             else:
                 cur.execute(
@@ -92,9 +92,29 @@ class Storage:
                              FROM samples GROUP BY container_id) m
                        ON s.container_id = m.container_id AND s.ts = m.ts
                        WHERE m.ts >= ?
-                       ORDER BY s.name""",
+                       ORDER BY s.name ASC, s.ts DESC""",
                     (cutoff,),
                 )
+            return [dict(r) for r in cur.fetchall()]
+
+    def instances_for_name(self, name: str) -> list[dict]:
+        """All container_ids that have ever borne `name`, with lifetime bounds.
+
+        Used by the per-name comparison view to overlay reruns (rebuilds, restarts)
+        of the same logical container.
+        """
+        with self._cursor() as cur:
+            cur.execute(
+                """SELECT container_id,
+                          MAX(image) AS image,
+                          MIN(ts)    AS first_seen,
+                          MAX(ts)    AS last_seen
+                   FROM samples
+                   WHERE name = ?
+                   GROUP BY container_id
+                   ORDER BY last_seen DESC""",
+                (name,),
+            )
             return [dict(r) for r in cur.fetchall()]
 
     def latest_for(self, container_id: str) -> dict | None:

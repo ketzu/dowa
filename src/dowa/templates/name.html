@@ -3,53 +3,67 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>dowa — {{ container_id[:12] }}</title>
+  <title>dowa — {{ name }}</title>
   <link rel="stylesheet" href="/static/styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 </head>
 <body>
   <header>
-    <h1><a href="/">dowa</a> <span class="crumb">/</span> <a id="container-name-link" href="#"><span id="container-name">{{ container_id[:12] }}</span></a> <span class="crumb">/</span> <span class="muted">{{ container_id[:12] }}</span></h1>
+    <h1><a href="/">dowa</a> <span class="crumb">/</span> <span id="container-name">{{ name }}</span></h1>
     <div class="meta">
       <label for="window-select">window</label>
       <select id="window-select"></select>
+      <label for="align-select">align</label>
+      <select id="align-select">
+        <option value="since_start">since start</option>
+        <option value="wall_clock">wall clock</option>
+      </select>
       <span id="bucket-info"></span>
       <span id="status">connecting…</span>
     </div>
   </header>
   <main id="detail">
     <div class="summary">
-      <div class="kv"><div class="k">container id</div><div class="v" id="container-id">{{ container_id }}</div></div>
-      <div class="kv"><div class="k">image</div><div class="v" id="image">—</div></div>
-      <div class="kv"><div class="k">pids</div><div class="v" id="pids">—</div></div>
-      <div class="kv"><div class="k">last sample</div><div class="v" id="last-sample">—</div></div>
+      <div class="kv"><div class="k">name</div><div class="v">{{ name }}</div></div>
+      <div class="kv"><div class="k">instances</div><div class="v" id="instance-count">—</div></div>
+      <div class="kv"><div class="k">first seen</div><div class="v" id="first-seen">—</div></div>
+      <div class="kv"><div class="k">most recent</div><div class="v" id="last-seen">—</div></div>
     </div>
     <section class="chart-section">
       <h2>CPU</h2>
       <div class="chart-wrap big"><canvas id="cpu-chart"></canvas></div>
     </section>
     <section class="chart-section">
-      <h2>Memory</h2>
+      <h2>Memory (used)</h2>
       <div class="chart-wrap big"><canvas id="mem-chart"></canvas></div>
     </section>
     <section class="chart-section">
-      <h2>Network (rate)</h2>
-      <div class="chart-wrap big"><canvas id="net-chart"></canvas></div>
-    </section>
-    <section class="chart-section">
-      <h2>Block I/O (rate)</h2>
-      <div class="chart-wrap big"><canvas id="io-chart"></canvas></div>
+      <h2>Instances</h2>
+      <table id="instance-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>container id</th>
+            <th>image</th>
+            <th>first seen</th>
+            <th>last seen</th>
+            <th>state</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </section>
   </main>
   <script>
     window.DOWA = {
-      containerId: {{ container_id|tojson }},
+      name: {{ name|tojson }},
       intervalMs: {{ interval_ms }},
       historyMinutes: {{ history_minutes }},
       retentionDays: {{ retention_days }},
     };
   </script>
-  <script src="/static/detail.js"></script>
+  <script src="/static/name.js"></script>
 </body>
 </html>

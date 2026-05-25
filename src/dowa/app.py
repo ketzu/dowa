@@ -85,18 +85,27 @@ def health() -> dict:
 
 
 @app.get("/api/containers")
-def containers(minutes: int | None = None, bucket: int | None = None) -> dict:
-    """Latest snapshot per live container, plus a bucketed history series."""
+def containers(
+    minutes: int | None = None,
+    bucket: int | None = None,
+    include_historical: bool = False,
+) -> dict:
+    """Latest snapshot per container plus a bucketed history series.
+
+    By default only live containers are returned (sample within ~3 scrape
+    intervals). With `include_historical=true`, stopped containers whose last
+    sample is within the selected `minutes` window are returned too, each
+    flagged `stale: true` — useful for comparing reruns / rebuilds.
+    """
     storage: Storage = app.state.storage
     minutes = minutes or settings.history_minutes_default
     if minutes <= 0 or minutes > MAX_MINUTES:
         raise HTTPException(status_code=400, detail=f"minutes out of range (1..{MAX_MINUTES})")
     bucket = bucket if (bucket and bucket > 0) else _pick_bucket(minutes)
 
-    # Hide containers whose last sample is older than 3 scrape intervals — they've
-    # likely been stopped or replaced (e.g. by a rebuild).
     fresh = max(settings.interval_seconds * 3, 15.0)
-    latest = storage.latest_per_container(fresh_within_seconds=fresh)
+    within = (minutes * 60) if include_historical else fresh
+    latest = storage.latest_per_container(fresh_within_seconds=within)
     now = time.time()
     since = now - minutes * 60
     ids = [c["container_id"] for c in latest]
@@ -109,6 +118,7 @@ def containers(minutes: int | None = None, bucket: int | None = None) -> dict:
             "container_id": cid,
             "name": c["name"],
             "image": c["image"],
+            "stale": (now - c["ts"]) > fresh,
             "latest": {
                 "ts": c["ts"],
                 "cpu_percent": c["cpu_percent"],
@@ -129,6 +139,7 @@ def containers(minutes: int | None = None, bucket: int | None = None) -> dict:
         "since": since,
         "minutes": minutes,
         "bucket": bucket,
+        "include_historical": include_historical,
     }
 
 
@@ -185,6 +196,64 @@ def container_detail(
         "minutes": minutes,
         "bucket": bucket,
         "now": now,
+    }
+
+
+@app.get("/name/{name}", response_class=HTMLResponse)
+def name_detail_page(request: Request, name: str) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "name.html",
+        {
+            "name": name,
+            "interval_ms": int(settings.interval_seconds * 1000),
+            "history_minutes": settings.history_minutes_default,
+            "retention_days": settings.retention_days,
+        },
+    )
+
+
+@app.get("/api/names/{name}")
+def name_detail(name: str, minutes: int | None = None, bucket: int | None = None) -> dict:
+    """All instances (container_ids) that have ever borne `name`, each with its
+    own bucketed history series — for overlaid rerun comparison."""
+    storage: Storage = app.state.storage
+    minutes = minutes or settings.history_minutes_default
+    if minutes <= 0 or minutes > MAX_MINUTES:
+        raise HTTPException(status_code=400, detail=f"minutes out of range (1..{MAX_MINUTES})")
+    bucket = bucket if (bucket and bucket > 0) else _pick_bucket(minutes)
+
+    instances_meta = storage.instances_for_name(name)
+    if not instances_meta:
+        raise HTTPException(status_code=404, detail=f"no containers named {name!r} in retention")
+
+    now = time.time()
+    since = now - minutes * 60
+    fresh = max(settings.interval_seconds * 3, 15.0)
+    ids = [m["container_id"] for m in instances_meta]
+    history_map = storage.history_per_container(ids, since, bucket)
+
+    instances: list[dict] = []
+    for m in instances_meta:
+        cid = m["container_id"]
+        latest = storage.latest_for(cid)
+        instances.append({
+            "container_id": cid,
+            "image": m["image"],
+            "first_seen": m["first_seen"],
+            "last_seen": m["last_seen"],
+            "stale": (now - m["last_seen"]) > fresh,
+            "latest": latest,
+            "history": history_map.get(cid, []),
+        })
+
+    return {
+        "name": name,
+        "instances": instances,
+        "now": now,
+        "since": since,
+        "minutes": minutes,
+        "bucket": bucket,
     }
 
 
